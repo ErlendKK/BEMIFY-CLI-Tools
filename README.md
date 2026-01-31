@@ -123,6 +123,16 @@ Resultatene inneholder bl.a.:
 | `bemify.downloadJson(data, filename)` | Last ned som JSON-fil |
 | `bemify.help()` | Vis hjelpetekst |
 
+## Output
+
+Resultatene inneholder bl.a.:
+- `effektBehov` — Energibehov per post (beregningspunkt A)
+- `termiskKildeYtelse` — Levert energi per kilde (beregningspunkt B/C)
+- `inneklima` — Temperaturer, CO₂, fuktighet
+- `ventilasjon` — Luftmengder, virkningsgrader
+
+Se [RESULTS.md](RESULTS.md) for komplett beskrivelse av datastrukturen.
+
 ## Lisens
 
 MIT
