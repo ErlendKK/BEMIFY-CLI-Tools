@@ -1,38 +1,47 @@
 # BEMIFY CLI Tools
 
-Python-verktøy for å kjøre BEMIFY-simuleringer fra kommandolinjen.
+Verktøy for å kjøre BEMIFY-simuleringer fra kommandolinjen, nettleserkonsollen eller Python script.
 
 ## Oversikt
 
-Disse scriptene lar deg automatisere BEMIFY-simuleringer, f.eks. for å kjøre samme bygningsmodell mot mange klimafiler. Nyttig for parameterstudier, klimasoneanalyser, eller validering mot andre verktøy.
+BEMIFY eksponerer et konsoll-API (`bemify.*`) som lar deg kjøre simuleringer, batch-simulere mot flere klimafiler, og laste ned resultater i to oppløsninger:
 
-**To tilnærminger:**
+- **JSON** — kvartersoppløsning (35 040 tidssteg)
+- **Excel** — timesoppløsning med ett ark per sone
 
-1. **Nettleserkonsoll** — Kjør direkte i browser via `bemify.*` API-et
-2. **Python + Playwright** — Automatiser simuleringer fra kommandolinjen
+Du trenger ingen ekstra installasjon for å bruke konsoll-API-et, bare åpne DevTools i nettleseren. For større batch-jobber finnes det Python-script med Playwright som automatiserer flyten.
 
 ## Forutsetninger
 
 - Bruker på [app.bemify.no](https://app.bemify.no)
-- Python 3.10+
 - Bygningsmodell i SXI-format (SIMIEN Pro)
-- Klimafiler i EPW-format
+- Klimafiler i EPW-format (kun nødvendig for batch-simulering — ellers brukes klimadata fra UI)
 
-## Installasjon
-```bash
-pip install playwright pandas tqdm
-playwright install chromium
-```
-
-## Bruk
-
-### Alternativ 1: Direkte i nettleserkonsoll
+## Nettleserkonsoll (console API)
 
 1. Åpne [app.bemify.no](https://app.bemify.no) og logg inn
-2. Åpne DevTools (F12) → Console
-3. Skriv `bemify.help()` for å se tilgjengelige funksjoner
+2. Last inn prosjekt og klimadata som vanlig i UI
+3. Åpne DevTools (F12) → Console
+4. Skriv `bemify.help()` for å se tilgjengelige funksjoner
 
-**Eksempel — enkel simulering:**
+### Simuler og last ned
+
+```javascript
+// Bruker prosjekt og klimadata som allerede er lastet i UI.
+bemify.simulate()
+bemify.downloadExcel()   // Timesverdier — venter automatisk på simulering
+bemify.downloadJson()    // Kvartersverdier — venter automatisk på simulering
+```
+
+### Excel med spesifikke kategorier
+
+```javascript
+bemify.simulate()
+bemify.downloadExcel({ categories: ['effektBehov', 'inneklima'] })
+```
+
+### Eksplisitt med resultat-variabel
+
 ```javascript
 const { climateData } = await bemify.loadEpw('http://localhost:8080/oslo.epw');
 const project = await bemify.loadSxi('http://localhost:8080/bygning.sxi');
@@ -40,7 +49,8 @@ const result = await bemify.simulate(project, climateData);
 bemify.downloadJson(result, 'resultat.json');
 ```
 
-**Eksempel — batch-simulering:**
+### Batch-simulering
+
 ```javascript
 const project = await bemify.loadSxi('http://localhost:8080/bygning.sxi');
 const climates = [
@@ -53,11 +63,49 @@ bemify.downloadJson(results, 'batch_resultat.json');
 
 > **NB:** For å laste lokale filer trenger du en lokal HTTP-server med CORS. Se [Lokal server med CORS](#lokal-server-med-cors).
 
-### Alternativ 2: Python-script med Playwright
+### Console API-referanse
 
-For større batch-jobber eller automatisering.
+| Funksjon | Beskrivelse |
+|----------|-------------|
+| `bemify.simulate()` | Kjør simulering med data fra UI |
+| `bemify.simulate(project, climate)` | Kjør simulering med eksplisitt data |
+| `bemify.batchSimulate(project, climates[])` | Batch-simulering, returnerer objekt |
+| `bemify.batchSimulateToNdjson(project, climates[])` | Batch-simulering, streamer til fil |
+| `bemify.downloadExcel()` | Last ned siste resultat som Excel (timesverdier) |
+| `bemify.downloadExcel(result, options?)` | Last ned spesifikt resultat som Excel |
+| `bemify.downloadJson()` | Last ned siste resultat som JSON (kvartersverdier) |
+| `bemify.downloadJson(data, filename?)` | Last ned data som JSON-fil |
+| `bemify.parseEpw(content)` | Parse EPW-streng → klimadata |
+| `bemify.parseSxi(content)` | Parse SXI-streng → prosjekt |
+| `bemify.loadEpw(url)` | Hent og parse EPW fra URL |
+| `bemify.loadSxi(url)` | Hent og parse SXI fra URL |
+| `bemify.help()` | Vis hjelpetekst |
 
-**Kjør simuleringer:**
+> `downloadExcel()` og `downloadJson()` venter automatisk på at en pågående simulering blir ferdig når de kalles uten argumenter.
+
+### Excel-eksport kategorier
+
+| Kategori | Beskrivelse |
+|----------|-------------|
+| `effektBehov` | Netto effektbehov per energipost [W] |
+| `ventilasjon` | Tilluftstemperatur, luftmengder, vifteeffekt m.m. |
+| `inneklima` | Temperaturer, CO₂, luftfuktighet m.m. |
+| `distribusjonsOgAkkumuleringstap` | Tap for romoppvarming, ventilasjon, varmtvann, kjøling |
+| `termiskKildeYtelse` | Input, output og tap per energibærer og kategori [W] |
+
+## Python-script med Playwright
+
+For større batch-jobber eller full automatisering uten manuell innlogging.
+
+### Installasjon
+
+```bash
+pip install playwright pandas tqdm
+playwright install chromium
+```
+
+### Kjør simuleringer
+
 ```bash
 python bemify_batch_runner.py bygning.sxi ./klimafiler/ --headed
 ```
@@ -67,7 +115,8 @@ Scriptet:
 2. Laster SXI-modell og alle EPW-filer fra mappen
 3. Kjører simuleringer og lagrer resultater til NDJSON-fil
 
-**Analyser resultater:**
+### Analyser resultater
+
 ```bash
 python bemify_results_analyzer.py results.ndjson
 python bemify_results_analyzer.py results.ndjson -o summary.csv
@@ -99,31 +148,19 @@ Filene blir tilgjengelige på `http://localhost:8080/`.
 
 ### Output
 
-**NDJSON** (Newline Delimited JSON) — én JSON-linje per simulering:
+| Format | Oppløsning | Beskrivelse |
+|--------|------------|-------------|
+| JSON | 15 min (35 040 steg) | Komplett simuleringsresultat |
+| Excel | 1 time (8 760 steg) | Ett ark per sone + aggregert «Samlet»-ark |
+| NDJSON | 15 min (35 040 steg) | Batch-resultater, én JSON-linje per simulering |
+
+**NDJSON-eksempel:**
 ```json
 {"climateName": "Oslo", "result": {...}}
 {"climateName": "Bergen", "result": {...}}
 ```
 
-Resultatene inneholder bl.a.:
-- `stepResultsPerSone` — Effektbehov per tidssteg (35 040 kvartersintervaller)
-- `varmetapstallPerSone` — Varmetapstall og arealer per sone
-
-## Console API-referanse
-
-| Funksjon | Beskrivelse |
-|----------|-------------|
-| `bemify.parseEpw(content)` | Parse EPW-streng → klimadata |
-| `bemify.parseSxi(content)` | Parse SXI-streng → prosjekt |
-| `bemify.loadEpw(url)` | Hent og parse EPW fra URL |
-| `bemify.loadSxi(url)` | Hent og parse SXI fra URL |
-| `bemify.simulate(project, climate)` | Kjør simulering |
-| `bemify.batchSimulate(project, climates[])` | Batch-simulering, returnerer objekt |
-| `bemify.batchSimulateToNdjson(project, climates[])` | Batch-simulering, streamer til fil |
-| `bemify.downloadJson(data, filename)` | Last ned som JSON-fil |
-| `bemify.help()` | Vis hjelpetekst |
-
-## Output
+## Output-innhold
 
 Resultatene inneholder bl.a.:
 - `effektBehov` — Energibehov per post (beregningspunkt A)
